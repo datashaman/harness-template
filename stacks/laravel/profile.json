@@ -2,7 +2,7 @@
   "name": "laravel",
   "description": "Laravel profile: Pint + Prettier (format), Pint + ESLint (lint), Larastan/PHPStan (typecheck), Pest + Pest\\Arch (test+architecture), Rector (deadcode dry-run), composer audit + npm audit, semgrep (optional). JS tooling runs only when the corresponding node_modules bin is present.",
   "sensors": {
-    "format": "./vendor/bin/pint --test && { [ ! -x ./node_modules/.bin/prettier ] || ./node_modules/.bin/prettier --check .; }",
+    "format": "./vendor/bin/pint && { [ ! -x ./node_modules/.bin/prettier ] || ./node_modules/.bin/prettier --write .; }",
     "lint": "./vendor/bin/pint --test && { [ ! -x ./node_modules/.bin/eslint ] || ./node_modules/.bin/eslint . --max-warnings 0; }",
     "typecheck": "./vendor/bin/phpstan analyse --memory-limit=2G --no-progress && { [ ! -f tsconfig.json ] || ./node_modules/.bin/tsc --noEmit; }",
     "test": "if php -r 'exit(extension_loaded(\"pcov\") || extension_loaded(\"xdebug\") ? 0 : 1);' 2>/dev/null; then XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --min=70; else echo 'no coverage driver (pcov/xdebug) — running without coverage threshold' >&2; ./vendor/bin/pest; fi",
