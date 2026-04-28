@@ -22,7 +22,8 @@ A polyglot starting point for building software *with* coding agents (Claude Cod
 ├── stacks/
 │   ├── typescript/        # drop-in profile (tsc, eslint, vitest, knip)
 │   ├── python/            # drop-in profile (ruff, mypy, pytest, vulture)
-│   └── go/                # drop-in profile (go vet, staticcheck, golangci-lint)
+│   ├── go/                # drop-in profile (go vet, staticcheck, golangci-lint)
+│   └── laravel/           # drop-in profile (pint, phpstan, pest+arch, rector)
 ├── scripts/
 │   ├── install-stack.sh   # picks one stacks/* profile and wires it in
 │   ├── harness-check.sh   # run all sensors locally
@@ -39,7 +40,7 @@ A polyglot starting point for building software *with* coding agents (Claude Cod
 ## Quickstart
 
 ```bash
-./scripts/install-stack.sh typescript    # or python, or go
+./scripts/install-stack.sh typescript    # or python, go, laravel
 ./scripts/harness-check.sh               # run sensors locally
 ```
 
