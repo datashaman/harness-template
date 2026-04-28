@@ -1,0 +1,17 @@
+{
+  "name": "python",
+  "description": "Python profile: ruff, mypy, pytest, vulture, pip-audit, semgrep.",
+  "files_to_install": [
+    "pyproject.toml",
+    "checks/test_architecture.py"
+  ],
+  "sensors": {
+    "format": "ruff format --check .",
+    "lint": "ruff check .",
+    "typecheck": "mypy src",
+    "test": "pytest --cov=src --cov-report=term-missing",
+    "deadcode": "vulture src --min-confidence 80",
+    "audit": "pip-audit",
+    "policy": "semgrep --config harness/policies/ --error"
+  }
+}

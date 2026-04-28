@@ -1,0 +1,27 @@
+# Cross-language complement to the per-stack architecture test. Catches
+# obvious boundary violations even when the structural test isn't wired up.
+
+rules:
+  - id: core-imports-adapter
+    languages: [typescript, javascript, python, go]
+    message: |
+      core/ must not import from adapters/. See docs/architecture.md.
+    severity: ERROR
+    paths:
+      include: ["src/core/**", "**/core/**"]
+    pattern-either:
+      - pattern: import ... from "$X/adapters/$Y"
+      - pattern: from $X.adapters import $Y
+      - pattern: import "$X/adapters/$Y"
+
+  - id: adapter-imports-app
+    languages: [typescript, javascript, python, go]
+    message: |
+      adapters/ must not import from app/. See docs/architecture.md.
+    severity: ERROR
+    paths:
+      include: ["src/adapters/**", "**/adapters/**"]
+    pattern-either:
+      - pattern: import ... from "$X/app/$Y"
+      - pattern: from $X.app import $Y
+      - pattern: import "$X/app/$Y"

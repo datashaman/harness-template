@@ -1,0 +1,52 @@
+name: nightly gc
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC every day
+  workflow_dispatch:
+    inputs:
+      agent:
+        description: 'Which agent runs the fixers'
+        type: choice
+        options: [claude, codex]
+        default: claude
+      max_prs:
+        description: 'Max refactor PRs to open'
+        type: string
+        default: '5'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  gc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Detect stack
+        id: stack
+        run: echo "stack=$(cat .harness-stack)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node (claude / codex CLIs)
+        uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Install agent CLI
+        run: |
+          if [[ "${{ inputs.agent || 'claude' }}" == "claude" ]]; then
+            npm install -g @anthropic-ai/claude-code
+          else
+            npm install -g @openai/codex
+          fi
+
+      - name: Run GC
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HARNESS_AGENT: ${{ inputs.agent || 'claude' }}
+          HARNESS_MAX_PRS: ${{ inputs.max_prs || '5' }}
+        run: ./scripts/gc-refactor.sh

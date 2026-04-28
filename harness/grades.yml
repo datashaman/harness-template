@@ -1,0 +1,54 @@
+# Quality grades — the GC loop reads this file to decide what to refactor next.
+#
+# Each grade has:
+#   weight:      how much the grade contributes to the file's composite score (0–1).
+#   threshold:   below this composite score, the file is a refactor candidate.
+#   fixer:       the slash command / script the GC loop should invoke.
+#
+# Keep grades few and sharp. Five good grades beat fifteen vague ones.
+
+grades:
+  legibility:
+    weight: 0.25
+    description: |
+      Functions are short, files are focused, names describe behavior, no
+      dead branches. Measured by cyclomatic complexity + file length.
+    threshold: 0.6
+    fixer: /gc-refactor legibility
+
+  boundary_compliance:
+    weight: 0.30
+    description: |
+      Imports respect the architecture invariants in docs/architecture.md.
+      Measured by the architecture structural test.
+    threshold: 1.0  # any violation = refactor candidate
+    fixer: /gc-refactor boundary
+
+  test_coverage:
+    weight: 0.20
+    description: |
+      Behavior coverage of public surface. Measured by line coverage on
+      exported symbols, not raw line coverage.
+    threshold: 0.7
+    fixer: /gc-refactor tests
+
+  duplication:
+    weight: 0.15
+    description: |
+      No copy-pasted blocks > 10 lines that could share a utility.
+    threshold: 0.8
+    fixer: /gc-refactor duplication
+
+  api_surface:
+    weight: 0.10
+    description: |
+      Exports are listed in module barrels; nothing is imported from a
+      module's internals.
+    threshold: 1.0
+    fixer: /gc-refactor surface
+
+# Files matching these globs are ungraded. Use sparingly.
+exclude:
+  - "**/*.generated.*"
+  - "**/migrations/**"
+  - "**/vendor/**"

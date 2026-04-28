@@ -1,0 +1,45 @@
+[project]
+name = "harness-template-py"
+version = "0.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",   # pycodestyle / pyflakes
+  "I",             # isort
+  "B",             # bugbear
+  "UP",            # pyupgrade
+  "SIM",           # simplify
+  "TID",           # tidy imports
+  "RUF",           # ruff-specific
+]
+ignore = []
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"src.adapters" = { msg = "core/ must not import from adapters/" }
+
+[tool.mypy]
+strict = true
+mypy_path = "src"
+exclude = ["tests/fixtures/"]
+
+[tool.pytest.ini_options]
+testpaths = ["src", "tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+
+[tool.vulture]
+paths = ["src"]
+min_confidence = 80

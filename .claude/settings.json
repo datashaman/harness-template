@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/harness-check.sh:*)",
+      "Bash(./scripts/gc-refactor.sh:*)",
+      "Bash(npm run:*)",
+      "Bash(npx:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(go test:*)",
+      "Bash(go vet:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(rg:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'test -f .harness-stack && ./scripts/harness-check.sh --keep-going > /tmp/harness-last.log 2>&1 || true'"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "go",
+  "description": "Go profile: gofmt, go vet, staticcheck, golangci-lint, go test, govulncheck.",
+  "files_to_install": [
+    "go.mod.template",
+    ".golangci.yml",
+    "checks/architecture_test.go"
+  ],
+  "sensors": {
+    "format": "test -z \"$(gofmt -l .)\"",
+    "lint": "golangci-lint run",
+    "typecheck": "go vet ./...",
+    "test": "go test -race -cover ./...",
+    "deadcode": "staticcheck -checks U1000 ./...",
+    "audit": "govulncheck ./...",
+    "policy": "semgrep --config harness/policies/ --error"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "typescript",
+  "description": "TypeScript profile: tsc, eslint, prettier, vitest, knip, npm audit.",
+  "files_to_install": [
+    "package.json",
+    "tsconfig.json",
+    ".eslintrc.cjs",
+    ".prettierrc",
+    "vitest.config.ts",
+    "knip.json",
+    "checks/architecture.test.ts"
+  ],
+  "sensors": {
+    "format": "npx prettier --check .",
+    "lint": "npx eslint . --max-warnings 0",
+    "typecheck": "npx tsc --noEmit",
+    "test": "npx vitest run --coverage",
+    "deadcode": "npx knip",
+    "audit": "npm audit --audit-level=high",
+    "policy": "npx semgrep --config harness/policies/ --error"
+  }
+}

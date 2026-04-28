@@ -1,0 +1,60 @@
+name: harness
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect stack
+        id: stack
+        run: |
+          if [[ -f .harness-stack ]]; then
+            echo "stack=$(cat .harness-stack)" >> "$GITHUB_OUTPUT"
+          else
+            echo "no stack installed"; exit 1
+          fi
+
+      - name: Setup Node
+        if: steps.stack.outputs.stack == 'typescript'
+        uses: actions/setup-node@v4
+        with: { node-version: '22', cache: 'npm' }
+
+      - name: Setup Python
+        if: steps.stack.outputs.stack == 'python'
+        uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Setup Go
+        if: steps.stack.outputs.stack == 'go'
+        uses: actions/setup-go@v5
+        with: { go-version: '1.23' }
+
+      - name: Install deps (typescript)
+        if: steps.stack.outputs.stack == 'typescript'
+        run: npm ci
+
+      - name: Install deps (python)
+        if: steps.stack.outputs.stack == 'python'
+        run: |
+          pip install -e .
+          pip install ruff mypy pytest pytest-cov vulture pip-audit semgrep
+
+      - name: Install deps (go)
+        if: steps.stack.outputs.stack == 'go'
+        run: |
+          go mod download
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin"
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Run harness
+        run: ./scripts/harness-check.sh
