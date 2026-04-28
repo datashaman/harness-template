@@ -1,0 +1,26 @@
+# Pre-commit / pre-push hooks for the laravel stack.
+# Install once with `lefthook install`. https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.php"
+      # Pint only checks the staged PHP files — fast even on big repos.
+      # Use `lefthook run pre-commit --files-from <(git diff --name-only)` for ad-hoc.
+      run: ./vendor/bin/pint --test {staged_files}
+
+    policy:
+      glob: "*.php"
+      run: |
+        if command -v semgrep >/dev/null; then
+          semgrep --config harness/policies/ --error {staged_files}
+        fi
+
+pre-push:
+  commands:
+    harness:
+      # The full sensor sweep — pint, phpstan, pest (with arch), rector,
+      # composer audit, semgrep. Slower than pre-commit but still under
+      # a minute for small projects.
+      run: ./scripts/harness-check.sh
