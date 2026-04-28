@@ -64,8 +64,17 @@ for path in "$profile_dir"/*; do
   # README rather than landing alongside it.
   [[ "$name" == "README.md" ]] && continue
   dest="${name%.template}"
-  cp -R "$path" "$repo_root/$dest"
-  echo "  + $dest"
+  target="$repo_root/$dest"
+  if [[ -d "$path" && -d "$target" ]]; then
+    # Merge the stack's directory into the existing one (so e.g.
+    # stacks/<stack>/docs/architecture.md overrides the polyglot
+    # docs/architecture.md instead of being placed at docs/docs/...).
+    cp -R "$path"/. "$target"/
+    echo "  ~ $dest/ (merged)"
+  else
+    cp -R "$path" "$target"
+    echo "  + $dest"
+  fi
 done
 
 # Stack-specific README replaces the polyglot one if present.
