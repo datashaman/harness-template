@@ -84,7 +84,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          allowed_tools: "Edit,Write,Read,Bash"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: |
             You are implementing GitHub issue #${{ github.event.issue.number }}.
 
