@@ -27,8 +27,19 @@
             <directory>app</directory>
         </include>
         <exclude>
+            <!-- Interface layer: entry points; exercised by Feature/Browser tests, not unit -->
             <directory>app/Http</directory>
+            <directory>app/Console</directory>
+            <!-- Infrastructure layer: I/O wrappers; faked in app-layer tests -->
             <directory>app/Infrastructure</directory>
+            <directory>app/Models</directory>
+            <directory>app/Providers</directory>
+            <directory>app/Jobs</directory>
+            <directory>app/Mail</directory>
+            <directory>app/Notifications</directory>
+            <directory>app/Events</directory>
+            <directory>app/Listeners</directory>
+            <directory>app/Casts</directory>
         </exclude>
     </source>
     <coverage includeUncoveredFiles="true">

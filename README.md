@@ -55,15 +55,23 @@ File a GitHub issue using the `Implementation spec` template (`.github/ISSUE_TEM
 
 If the harness can't go green or the spec is ambiguous, the agent comments on the issue with what blocked instead of pushing a half-finished PR.
 
-Requires `ANTHROPIC_API_KEY` in repository secrets. Auto-merge is intentionally not enabled.
+**One-time setup per repo:**
 
-**One-time setup per repo** (GitHub doesn't copy labels from template repos):
+1. **Labels** — GitHub doesn't copy labels from template repos:
+   ```bash
+   ./scripts/setup-github-labels.sh
+   ```
+   Creates `agent:implement` (issue trigger) and `agent:generated` (bot-opened PRs).
 
-```bash
-./scripts/setup-github-labels.sh
-```
+2. **Secrets** — at `https://github.com/<owner>/<repo>/settings/secrets/actions`:
+   - `ANTHROPIC_API_KEY` — for `claude-code-action` (agent runs) and `review.yml`.
+   - `BOT_TOKEN` — a fine-grained PAT scoped to this repo with **Contents: read+write**, **Pull requests: read+write**, **Issues: read+write**. Without this, `harness.yml` and `review.yml` won't fire on PRs the bot opens — GitHub deliberately suppresses workflow runs caused by `GITHUB_TOKEN` to prevent recursion. The PAT-driven push triggers them.
 
-That creates `agent:implement` (auto-applied by the issue template, fires the workflow) and `agent:generated` (applied to PRs the bot opens).
+3. **Repo settings** — at `https://github.com/<owner>/<repo>/settings/actions`, in **Workflow permissions**:
+   - Select **Read and write permissions**.
+   - Check **Allow GitHub Actions to create and approve pull requests**.
+
+Auto-merge is intentionally not enabled. The harness gates correctness; you decide intent.
 
 ## Philosophy
 

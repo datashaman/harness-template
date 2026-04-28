@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http;
+namespace App\Console;
 
 use App\Application\SayHello;
 use Illuminate\Console\Command;
