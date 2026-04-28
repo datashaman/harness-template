@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 
 
@@ -12,7 +12,7 @@ class Clock(Protocol):
 @dataclass(frozen=True)
 class _SystemClock:
     def now(self) -> datetime:
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
 
 system_clock: Clock = _SystemClock()

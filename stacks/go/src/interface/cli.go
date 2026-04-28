@@ -1,10 +1,10 @@
+// Command cli is the entry point that composes app use cases.
 package main
 
 import (
 	"fmt"
 	"os"
 
-	"example.com/harness/src/adapters"
 	"example.com/harness/src/app"
 )
 
@@ -13,7 +13,7 @@ func main() {
 	if len(os.Args) > 1 {
 		name = os.Args[1]
 	}
-	out, err := app.SayHello(adapters.SystemClock, name)
+	out, err := app.SayHello(name)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

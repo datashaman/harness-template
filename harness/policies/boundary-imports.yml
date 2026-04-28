@@ -1,27 +1,51 @@
 # Cross-language complement to the per-stack architecture test. Catches
 # obvious boundary violations even when the structural test isn't wired up.
+# Rules are split per-language because semgrep can't share import patterns
+# across syntaxes.
 
 rules:
-  - id: core-imports-adapter
-    languages: [typescript, javascript, python, go]
+  - id: core-imports-adapter-ts
+    languages: [typescript, javascript]
     message: |
       core/ must not import from adapters/. See docs/architecture.md.
     severity: ERROR
     paths:
-      include: ["src/core/**", "**/core/**"]
+      include: ["**/src/core/**"]
     pattern-either:
-      - pattern: import ... from "$X/adapters/$Y"
-      - pattern: from $X.adapters import $Y
-      - pattern: import "$X/adapters/$Y"
+      - pattern: import $X from "$Y/adapters/$Z"
+      - pattern: import { ... } from "$Y/adapters/$Z"
+      - pattern: import "$Y/adapters/$Z"
 
-  - id: adapter-imports-app
-    languages: [typescript, javascript, python, go]
+  - id: core-imports-adapter-py
+    languages: [python]
+    message: |
+      core/ must not import from adapters/. See docs/architecture.md.
+    severity: ERROR
+    paths:
+      include: ["**/src/core/**"]
+    pattern-either:
+      - pattern: from $X.adapters import $Y
+      - pattern: from src.adapters import $Y
+
+  - id: adapter-imports-app-ts
+    languages: [typescript, javascript]
     message: |
       adapters/ must not import from app/. See docs/architecture.md.
     severity: ERROR
     paths:
-      include: ["src/adapters/**", "**/adapters/**"]
+      include: ["**/src/adapters/**"]
     pattern-either:
-      - pattern: import ... from "$X/app/$Y"
+      - pattern: import $X from "$Y/app/$Z"
+      - pattern: import { ... } from "$Y/app/$Z"
+      - pattern: import "$Y/app/$Z"
+
+  - id: adapter-imports-app-py
+    languages: [python]
+    message: |
+      adapters/ must not import from app/. See docs/architecture.md.
+    severity: ERROR
+    paths:
+      include: ["**/src/adapters/**"]
+    pattern-either:
       - pattern: from $X.app import $Y
-      - pattern: import "$X/app/$Y"
+      - pattern: from src.app import $Y

@@ -2,21 +2,26 @@
 # Add rules here when a class of bug bites you twice. One rule per file.
 
 rules:
-  - id: no-empty-catch
-    languages: [typescript, javascript, python]
+  - id: no-empty-catch-js
+    languages: [typescript, javascript]
     message: |
       Empty catch swallows errors. Either log+rethrow or convert to a typed
       Result. See AGENTS.md rule 3 (no silent fallbacks).
     severity: ERROR
-    patterns:
-      - pattern-either:
-          - pattern: |
-              try { ... } catch ($E) { }
-          - pattern: |
-              try:
-                ...
-              except $E:
-                pass
+    pattern: |
+      try { ... } catch ($E) { }
+
+  - id: no-empty-catch-py
+    languages: [python]
+    message: |
+      Empty except swallows errors. Either log+raise or convert to a typed
+      result. See AGENTS.md rule 3 (no silent fallbacks).
+    severity: ERROR
+    pattern: |
+      try:
+        ...
+      except $E:
+        pass
 
   - id: console-log-in-src
     languages: [typescript, javascript]
@@ -24,7 +29,7 @@ rules:
       Use the structured logger, not console.log. See docs/conventions.md.
     severity: WARNING
     paths:
-      include: ["src/**"]
+      include: ["**/src/**"]
       exclude: ["**/*.test.*"]
     pattern: console.log(...)
 
@@ -34,6 +39,6 @@ rules:
       Use the structured logger, not print(). See docs/conventions.md.
     severity: WARNING
     paths:
-      include: ["src/**"]
+      include: ["**/src/**"]
       exclude: ["**/test_*.py", "**/*_test.py"]
     pattern: print(...)

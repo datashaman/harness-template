@@ -1,8 +1,11 @@
+version: "2"
+
 run:
   timeout: 5m
   tests: true
 
 linters:
+  default: none
   enable:
     - errcheck
     - govet
@@ -14,25 +17,26 @@ linters:
     - depguard
     - gosec
     - misspell
-
-linters-settings:
-  gocyclo:
-    min-complexity: 12
-  depguard:
-    rules:
-      core:
-        files: ["**/core/**"]
-        deny:
-          - pkg: ".*/adapters"
-            desc: "core/ must not import from adapters/ (docs/architecture.md)"
-          - pkg: ".*/app"
-            desc: "core/ must not import from app/ (docs/architecture.md)"
-          - pkg: ".*/interface"
-            desc: "core/ must not import from interface/ (docs/architecture.md)"
-      adapters:
-        files: ["**/adapters/**"]
-        deny:
-          - pkg: ".*/app"
-            desc: "adapters/ must not import from app/ (docs/architecture.md)"
-          - pkg: ".*/interface"
-            desc: "adapters/ must not import from interface/ (docs/architecture.md)"
+  settings:
+    gocyclo:
+      min-complexity: 12
+    depguard:
+      rules:
+        core:
+          files:
+            - "**/core/**"
+          deny:
+            - pkg: "**/adapters"
+              desc: "core/ must not import from adapters/ (docs/architecture.md)"
+            - pkg: "**/app"
+              desc: "core/ must not import from app/ (docs/architecture.md)"
+            - pkg: "**/interface"
+              desc: "core/ must not import from interface/ (docs/architecture.md)"
+        adapters:
+          files:
+            - "**/adapters/**"
+          deny:
+            - pkg: "**/app"
+              desc: "adapters/ must not import from app/ (docs/architecture.md)"
+            - pkg: "**/interface"
+              desc: "adapters/ must not import from interface/ (docs/architecture.md)"

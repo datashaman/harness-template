@@ -14,13 +14,16 @@ select = [
   "B",             # bugbear
   "UP",            # pyupgrade
   "SIM",           # simplify
-  "TID",           # tidy imports
   "RUF",           # ruff-specific
 ]
 ignore = []
+# Architecture invariants are enforced structurally by checks/test_architecture.py
+# rather than via flake8-tidy-imports — banned-api is project-global and cannot
+# express the per-layer rules in docs/architecture.md.
 
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"src.adapters" = { msg = "core/ must not import from adapters/" }
+[tool.ruff.lint.per-file-ignores]
+"src/**/test_*.py" = ["S101"]
+"src/**/__init__.py" = ["F401"]
 
 [tool.mypy]
 strict = true
@@ -35,6 +38,12 @@ addopts = "-ra --strict-markers"
 [tool.coverage.run]
 source = ["src"]
 branch = true
+omit = [
+  "src/interface/*",   # entry points — exercised by integration tests
+  "src/adapters/*",    # adapters wrap I/O — exercised via fakes in app tests
+  "src/**/__init__.py",
+  "src/**/test_*.py",
+]
 
 [tool.coverage.report]
 fail_under = 70
