@@ -10,8 +10,13 @@
          failOnWarning="true">
     <testsuites>
         <testsuite name="Unit">
-            <directory>tests</directory>
-            <directory>app</directory>
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Browser">
+            <directory>tests/Browser</directory>
         </testsuite>
         <testsuite name="Architecture">
             <directory>checks</directory>

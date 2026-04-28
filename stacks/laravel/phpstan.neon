@@ -19,7 +19,6 @@ parameters:
             - vendor/*
             # Pest tests use dynamic helpers (it/expect/arch) that vanilla
             # PHPStan can't model. Pest verifies them at runtime.
-            - app/**/*Test.php
             - tests/**/*Test.php
             - checks/**/*Test.php
     treatPhpDocTypesAsCertain: false
