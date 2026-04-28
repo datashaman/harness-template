@@ -1,0 +1,13 @@
+{
+  "name": "laravel",
+  "description": "Laravel profile: Pint (format+lint), Larastan/PHPStan (typecheck), Pest + Pest\\Arch (test+architecture), Rector (deadcode dry-run), composer audit, semgrep (optional). Coverage runs when pcov or xdebug is loaded.",
+  "sensors": {
+    "format": "./vendor/bin/pint --test",
+    "lint": "./vendor/bin/pint --test",
+    "typecheck": "./vendor/bin/phpstan analyse --memory-limit=2G --no-progress",
+    "test": "if php -r 'exit(extension_loaded(\"pcov\") || extension_loaded(\"xdebug\") ? 0 : 1);' 2>/dev/null; then XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --min=70; else echo 'no coverage driver (pcov/xdebug) — running without coverage threshold' >&2; ./vendor/bin/pest; fi",
+    "deadcode": "./vendor/bin/rector process --dry-run --no-progress-bar",
+    "audit": "composer audit --no-dev",
+    "policy": "command -v semgrep >/dev/null && semgrep --config harness/policies/ --error || echo 'semgrep not installed (pip install semgrep) — skipping policy sensor' >&2"
+  }
+}
