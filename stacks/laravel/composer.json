@@ -10,9 +10,10 @@
   "require-dev": {
     "laravel/pint": "^1.18",
     "larastan/larastan": "^3.0",
-    "pestphp/pest": "^3.0",
-    "pestphp/pest-plugin-arch": "^3.0",
-    "pestphp/pest-plugin-laravel": "^3.0",
+    "pestphp/pest": "^4.0",
+    "pestphp/pest-plugin-arch": "^4.0",
+    "pestphp/pest-plugin-browser": "^4.0",
+    "pestphp/pest-plugin-laravel": "^4.0",
     "rector/rector": "^2.0",
     "driftingly/rector-laravel": "^2.0"
   },
