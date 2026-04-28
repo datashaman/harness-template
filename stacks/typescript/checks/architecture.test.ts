@@ -3,8 +3,7 @@
  * docs/architecture.md are violated. Run as part of `npm test`.
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
-import { globSync } from "node:fs";
+import { readFileSync, globSync } from "node:fs";
 import { join } from "node:path";
 
 type Layer = "core" | "adapters" | "app" | "interface";

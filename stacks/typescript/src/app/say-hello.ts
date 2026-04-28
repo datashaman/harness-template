@@ -1,6 +1,6 @@
+import { type Clock, systemClock } from "@adapters/index.js";
 import { greet } from "@core/index.js";
-import type { Clock } from "@adapters/index.js";
 
-export function sayHello(clock: Clock, name: string): string {
+export function sayHello(name: string, clock: Clock = systemClock): string {
   return `[${clock.now().toISOString()}] ${greet(name)}`;
 }
