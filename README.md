@@ -44,6 +44,19 @@ A polyglot starting point for building software *with* coding agents (Claude Cod
 ./scripts/harness-check.sh               # run sensors locally
 ```
 
+## Spec-to-PR factory (optional)
+
+File a GitHub issue using the `Implementation spec` template (`.github/ISSUE_TEMPLATE/spec.yml`). The `agent:implement` label fires `.github/workflows/issue-implement.yml`, which:
+
+1. Sets up the stack toolchain (mirrors `harness.yml`).
+2. Creates a branch `agent/issue-<n>` and runs Claude Code with the issue body, `AGENTS.md`, and `docs/architecture.md` as context.
+3. Lets the agent write code, run `./scripts/harness-check.sh` until green (up to 8 rounds), and commit.
+4. Pushes the branch and opens a PR linked to the issue. `review.yml` then runs Claude + Codex review on the PR.
+
+If the harness can't go green or the spec is ambiguous, the agent comments on the issue with what blocked instead of pushing a half-finished PR.
+
+Requires `ANTHROPIC_API_KEY` in repository secrets. Auto-merge is intentionally not enabled.
+
 ## Philosophy
 
 1. **Small surface, sharp edges.** Every check exists because skipping it has bitten someone. No sensor without a reason on its line.

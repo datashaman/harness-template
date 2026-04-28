@@ -1,0 +1,61 @@
+name: Implementation spec
+description: Specification for an agent to implement. Filing this issue (with the agent:implement label) triggers the implement-issue workflow.
+title: "feat: "
+labels: ["agent:implement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The agent reads every field of this issue verbatim as its spec. Architecture invariants in `docs/architecture.md` and the harness gate the result. **Underspecified issues produce underspecified PRs.** Spend an extra minute here; you'll save thirty later.
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: User-visible behavior
+      description: In 1-2 sentences from a user's perspective — what does this do?
+      placeholder: A GET /health endpoint that returns 200 + JSON when the app and its dependencies are reachable.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bulleted, testable conditions. Each should map to at least one regression test.
+      placeholder: |
+        - GET /health returns 200 with `{"status":"ok","sha":"<git_sha>"}`
+        - returns 503 when the database is unreachable
+        - response includes a `Cache-Control: no-store` header
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Files likely touched (hint, not constraint)
+      description: A starting point. The agent may go elsewhere if needed; flag if you'd reject those changes.
+      placeholder: |
+        app/Http/HealthController.php
+        routes/web.php
+        tests/Feature/HealthTest.php
+    validations:
+      required: false
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What the agent must NOT do.
+      placeholder: |
+        - don't add Prometheus metrics — that's a separate issue
+        - don't touch the auth middleware
+    validations:
+      required: false
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Linked issues, design docs, prior art the agent should read first.
+    validations:
+      required: false
