@@ -23,11 +23,16 @@ jobs:
     env:
       ISSUE: ${{ github.event.issue.number }}
       BRANCH: agent/issue-${{ github.event.issue.number }}
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # BOT_TOKEN (a fine-grained PAT) lets the PR opened here trigger
+      # downstream harness.yml + review.yml runs. Falls back to GITHUB_TOKEN
+      # if absent — but in that case downstream workflows won't fire on the PR.
+      GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Detect stack
         id: stack
