@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Application;
+namespace App\UseCases;
 
 use App\Domain\Greeting;
 use App\Infrastructure\Clock;

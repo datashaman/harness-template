@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Application\SayHello;
 use App\Infrastructure\Clock;
+use App\UseCases\SayHello;
 
 beforeEach(function (): void {
     $this->fixedClock = new class implements Clock

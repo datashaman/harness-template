@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console;
 
-use App\Application\SayHello;
+use App\UseCases\SayHello;
 use Illuminate\Console\Command;
 
 final class HelloCommand extends Command

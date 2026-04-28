@@ -7,7 +7,7 @@ declare(strict_types=1);
 //
 // Layer map:
 //   Domain          → App\Domain
-//   Application     → App\Application
+//   UseCases        → App\UseCases  (the "Application" layer in clean-arch)
 //   Infrastructure  → App\Infrastructure, App\Models, App\Providers, App\Jobs,
 //                     App\Mail, App\Notifications, App\Events, App\Listeners,
 //                     App\Casts
@@ -16,7 +16,7 @@ declare(strict_types=1);
 arch('domain has no I/O dependencies')
     ->expect('App\Domain')
     ->not->toUse([
-        'App\Application',
+        'App\UseCases',
         'App\Infrastructure',
         'App\Models',
         'App\Providers',
@@ -32,7 +32,7 @@ arch('domain has no I/O dependencies')
         'Symfony',
     ]);
 
-arch('infrastructure does not depend on application or interface')
+arch('infrastructure does not depend on use cases or interface')
     ->expect([
         'App\Infrastructure',
         'App\Models',
@@ -44,7 +44,7 @@ arch('infrastructure does not depend on application or interface')
         'App\Listeners',
         'App\Casts',
     ])
-    ->not->toUse(['App\Application', 'App\Http', 'App\Console']);
+    ->not->toUse(['App\UseCases', 'App\Http', 'App\Console']);
 
 arch('interface does not import infrastructure directly')
     ->expect(['App\Http', 'App\Console'])
