@@ -60,10 +60,19 @@ for path in "$profile_dir"/*; do
   name="$(basename "$path")"
   [[ "$name" == "profile.json" ]] && continue
   [[ "$name" == "grade.sh"    ]] && continue   # invoked in place
+  # README.md is handled below so it overwrites the polyglot template's
+  # README rather than landing alongside it.
+  [[ "$name" == "README.md" ]] && continue
   dest="${name%.template}"
   cp -R "$path" "$repo_root/$dest"
   echo "  + $dest"
 done
+
+# Stack-specific README replaces the polyglot one if present.
+if [[ -f "$profile_dir/README.md" ]]; then
+  cp "$profile_dir/README.md" "$repo_root/README.md"
+  echo "  + README.md (stack-specific)"
+fi
 
 echo "$stack" > "$marker"
 
