@@ -43,8 +43,10 @@ shopt -s dotglob
 for path in "$profile_dir"/*; do
   name="$(basename "$path")"
   [[ "$name" == "profile.json" ]] && continue
-  cp -R "$path" "$repo_root/$name"
-  echo "  + $name"
+  [[ "$name" == "grade.sh"    ]] && continue   # invoked in place
+  dest="${name%.template}"
+  cp -R "$path" "$repo_root/$dest"
+  echo "  + $dest"
 done
 
 echo "$stack" > "$marker"

@@ -1,0 +1,21 @@
+# Pre-commit / pre-push wiring. Install lefthook once with `lefthook install`.
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      run: |
+        if [[ -f .harness-stack ]]; then
+          stack=$(cat .harness-stack)
+          cmd=$(jq -r '.sensors.format // empty' "stacks/$stack/profile.json")
+          [[ -n "$cmd" ]] && bash -c "$cmd"
+        fi
+    policy:
+      glob: "*.{ts,tsx,js,py,go}"
+      run: semgrep --config harness/policies/ --error {staged_files} || true
+
+pre-push:
+  commands:
+    harness:
+      run: ./scripts/harness-check.sh
