@@ -57,6 +57,14 @@ If the harness can't go green or the spec is ambiguous, the agent comments on th
 
 Requires `ANTHROPIC_API_KEY` in repository secrets. Auto-merge is intentionally not enabled.
 
+**One-time setup per repo** (GitHub doesn't copy labels from template repos):
+
+```bash
+./scripts/setup-github-labels.sh
+```
+
+That creates `agent:implement` (auto-applied by the issue template, fires the workflow) and `agent:generated` (applied to PRs the bot opens).
+
 ## Philosophy
 
 1. **Small surface, sharp edges.** Every check exists because skipping it has bitten someone. No sensor without a reason on its line.
