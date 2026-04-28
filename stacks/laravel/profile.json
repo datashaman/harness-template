@@ -5,7 +5,7 @@
     "format": "./vendor/bin/pint && { [ ! -x ./node_modules/.bin/prettier ] || ./node_modules/.bin/prettier --write .; }",
     "lint": "./vendor/bin/pint --test && { [ ! -x ./node_modules/.bin/eslint ] || ./node_modules/.bin/eslint . --max-warnings 0; }",
     "typecheck": "./vendor/bin/phpstan analyse --memory-limit=2G --no-progress && { [ ! -f tsconfig.json ] || ./node_modules/.bin/tsc --noEmit; }",
-    "test": "if php -r 'exit(extension_loaded(\"pcov\") || extension_loaded(\"xdebug\") ? 0 : 1);' 2>/dev/null; then XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --min=70; else echo 'no coverage driver (pcov/xdebug) — running without coverage threshold' >&2; ./vendor/bin/pest; fi",
+    "test": "if php -r 'exit(extension_loaded(\"pcov\") || extension_loaded(\"xdebug\") ? 0 : 1);' 2>/dev/null; then XDEBUG_MODE=coverage ./vendor/bin/pest --coverage --min=70; else echo 'no coverage driver (pcov/xdebug) — running without coverage threshold' >&2; ./vendor/bin/pest; fi && { [ ! -x ./node_modules/.bin/vitest ] || ./node_modules/.bin/vitest run; } && { [ ! -x ./node_modules/.bin/jest ] || ./node_modules/.bin/jest --ci; }",
     "deadcode": "./vendor/bin/rector process --dry-run --no-progress-bar",
     "audit": "composer audit --no-dev && { [ ! -f package-lock.json ] || npm audit --omit=dev --audit-level=high; }",
     "policy": "command -v semgrep >/dev/null && semgrep --config harness/policies/ --error || echo 'semgrep not installed (pip install semgrep) — skipping policy sensor' >&2"

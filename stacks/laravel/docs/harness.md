@@ -22,13 +22,13 @@ Run on every change. If any fail, the PR doesn't land. Run all locally with:
 | Format       | Applies code style fixes (Pint applies; Prettier --write if installed) | `./vendor/bin/pint` + `prettier --write`                                     |
 | Lint         | Verifies style + lint rules (Pint --test; ESLint if installed)       | `./vendor/bin/pint --test` + `eslint`                                        |
 | Typecheck    | PHP type correctness (level 8); TypeScript if `tsconfig.json` present | `./vendor/bin/phpstan analyse` + `tsc --noEmit`                              |
-| Test         | Behaviour + coverage (`--min=70` when pcov/xdebug loaded)            | `./vendor/bin/pest`                                                          |
+| Test         | PHP behaviour + coverage (Pest, `--min=70` when pcov/xdebug loaded); JS tests via Vitest or Jest if installed | `./vendor/bin/pest` + `vitest run` + `jest --ci`                             |
 | Architecture | Layer-boundary invariants from `docs/architecture.md`                | Pest Arch in `checks/ArchitectureTest.php`                                   |
 | Deadcode     | Unused symbols, missing return types, outdated patterns              | `./vendor/bin/rector process --dry-run`                                      |
 | Audit        | Known CVEs in PHP deps; npm deps if `package-lock.json` present      | `composer audit --no-dev` + `npm audit --omit=dev`                           |
 | Policy       | Cross-cutting rules (no empty catch, no `print` in `app/`, …)        | `semgrep --config harness/policies/` (graceful no-op when not installed)     |
 
-JS sensors (Prettier, ESLint, `tsc`, `npm audit`) only fire when their corresponding files exist (`node_modules/.bin/<tool>`, `tsconfig.json`, `package-lock.json`). Fresh `composer create-project laravel/laravel` ships Vite but not Prettier/ESLint — `npm i -D prettier eslint` to enable them.
+JS sensors (Prettier, ESLint, `tsc`, Vitest, Jest, `npm audit`) only fire when their corresponding files exist (`node_modules/.bin/<tool>`, `tsconfig.json`, `package-lock.json`). Fresh `composer create-project laravel/laravel` ships Vite but not Prettier/ESLint/Vitest — `npm i -D prettier eslint vitest` (or `jest`) to enable them. Vitest and Jest are detected independently; if both are installed, both run.
 
 **Why format applies and lint checks:** the convention is `pint` rewrites files in place, `pint --test` exits non-zero on drift. Running them in that order means `harness-check.sh` auto-fixes what it can (format) and only fails on the things Pint couldn't auto-fix (lint, typecheck, tests). If `format` mutated files during the run, your working tree will show changes — stage and commit them.
 
