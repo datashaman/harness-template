@@ -19,14 +19,16 @@ Run on every change. If any fail, the PR doesn't land. Run all locally with:
 
 | Sensor       | What it checks                                                       | Tool                                                                         |
 |--------------|----------------------------------------------------------------------|------------------------------------------------------------------------------|
-| Format       | Code style (Laravel preset + strict_types + ordered imports)         | `./vendor/bin/pint --test`                                                   |
-| Lint         | Style + lint rules (Pint runs the same checks)                       | `./vendor/bin/pint --test`                                                   |
-| Typecheck    | Type correctness (level 8, strictest)                                | `./vendor/bin/phpstan analyse`                                               |
+| Format       | PHP code style; JS/CSS/Vue/JSON if Prettier installed                | `./vendor/bin/pint --test` + `prettier --check`                              |
+| Lint         | Pint lint rules; ESLint if installed                                 | `./vendor/bin/pint --test` + `eslint`                                        |
+| Typecheck    | PHP type correctness (level 8); TypeScript if `tsconfig.json` present | `./vendor/bin/phpstan analyse` + `tsc --noEmit`                              |
 | Test         | Behaviour + coverage (`--min=70` when pcov/xdebug loaded)            | `./vendor/bin/pest`                                                          |
 | Architecture | Layer-boundary invariants from `docs/architecture.md`                | Pest Arch in `checks/ArchitectureTest.php`                                   |
 | Deadcode     | Unused symbols, missing return types, outdated patterns              | `./vendor/bin/rector process --dry-run`                                      |
-| Audit        | Known CVEs in production deps                                        | `composer audit --no-dev`                                                    |
+| Audit        | Known CVEs in PHP deps; npm deps if `package-lock.json` present      | `composer audit --no-dev` + `npm audit --omit=dev`                           |
 | Policy       | Cross-cutting rules (no empty catch, no `print` in `app/`, …)        | `semgrep --config harness/policies/` (graceful no-op when not installed)     |
+
+JS sensors (Prettier, ESLint, `tsc`, `npm audit`) only fire when their corresponding files exist (`node_modules/.bin/<tool>`, `tsconfig.json`, `package-lock.json`). Fresh `composer create-project laravel/laravel` ships Vite but not Prettier/ESLint — `npm i -D prettier eslint` to enable them.
 
 The `test` sensor auto-detects whether `pcov` or `xdebug` is loaded; with neither, it runs Pest without the coverage gate.
 

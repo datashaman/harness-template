@@ -4,14 +4,30 @@
 pre-commit:
   parallel: true
   commands:
-    format:
-      glob: "*.php"
-      # Pint only checks the staged PHP files — fast even on big repos.
-      # Use `lefthook run pre-commit --files-from <(git diff --name-only)` for ad-hoc.
+    format-php:
+      glob: "*.{php,blade.php}"
       run: ./vendor/bin/pint --test {staged_files}
 
+    format-js:
+      # Laravel ships resources/js + resources/css + Vite config. Prettier is
+      # optional — a fresh `composer create-project laravel/laravel` doesn't
+      # include it. When it's installed (npm i -D prettier), this fires; when
+      # it isn't, the step no-ops so committers without Node aren't blocked.
+      glob: "*.{js,mjs,cjs,ts,tsx,jsx,vue,svelte,css,scss,sass,html,json,yml,yaml,md}"
+      run: |
+        if [[ -x ./node_modules/.bin/prettier ]]; then
+          ./node_modules/.bin/prettier --check {staged_files}
+        fi
+
+    lint-js:
+      glob: "*.{js,mjs,cjs,ts,tsx,jsx,vue,svelte}"
+      run: |
+        if [[ -x ./node_modules/.bin/eslint ]]; then
+          ./node_modules/.bin/eslint --max-warnings 0 {staged_files}
+        fi
+
     policy:
-      glob: "*.php"
+      glob: "*.{php,js,mjs,cjs,ts,tsx,jsx,vue}"
       run: |
         if command -v semgrep >/dev/null; then
           semgrep --config harness/policies/ --error {staged_files}
@@ -20,7 +36,4 @@ pre-commit:
 pre-push:
   commands:
     harness:
-      # The full sensor sweep — pint, phpstan, pest (with arch), rector,
-      # composer audit, semgrep. Slower than pre-commit but still under
-      # a minute for small projects.
       run: ./scripts/harness-check.sh
