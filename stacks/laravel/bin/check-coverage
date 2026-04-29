@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# Verify every acceptance criterion has a corresponding test.
+# Usage: bin/check-coverage [--spec=path] [--json]
+# Exit 0 if all ACs covered, 1 otherwise.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+SINGLE_SPEC=""
+JSON_OUTPUT=0
+
+for arg in "$@"; do
+    case "$arg" in
+        --spec=*) SINGLE_SPEC="${arg#--spec=}" ;;
+        --json)   JSON_OUTPUT=1 ;;
+        *) echo "Unknown flag: $arg" >&2; exit 2 ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Helpers (duplicated from generate-tests; in a real repo, source a common file)
+# ---------------------------------------------------------------------------
+resolve_target() {
+    local spec="$1"
+    local rel="${spec#features/}"
+    local dir file studly_dir studly_file
+
+    dir="$(dirname "$rel")"
+    file="$(basename "$rel" .md)"
+
+    studly_dir=""
+    if [[ "$dir" != "." ]]; then
+        IFS='/' read -ra parts <<< "$dir"
+        for p in "${parts[@]}"; do
+            studly_dir+="/$(echo "$p" | awk -F'[-_]' '{for(i=1;i<=NF;i++) printf "%s", toupper(substr($i,1,1)) substr($i,2)}')"
+        done
+    fi
+
+    studly_file="$(echo "$file" | awk -F'[-_]' '{for(i=1;i<=NF;i++) printf "%s", toupper(substr($i,1,1)) substr($i,2)}')Test.php"
+
+    echo "tests/Feature${studly_dir}/${studly_file}"
+}
+
+extract_ac_ids() {
+    grep -oE '^\|\s*[A-Z]+-[0-9]+\s*\|' "$1" 2>/dev/null \
+        | sed -E 's/^\|\s*([A-Z]+-[0-9]+)\s*\|/\1/' \
+        | sort -u
+}
+
+extract_covered_ids() {
+    grep -oE '@covers\s+[A-Z0-9 \-]+' "$1" 2>/dev/null \
+        | sed -E 's/@covers\s+//' \
+        | tr ' ' '\n' \
+        | grep -E '^[A-Z]+-[0-9]+$' \
+        | sort -u
+}
+
+# ---------------------------------------------------------------------------
+# Find specs to check
+# ---------------------------------------------------------------------------
+if [[ -n "$SINGLE_SPEC" ]]; then
+    SPECS=("$SINGLE_SPEC")
+elif [[ -d features ]]; then
+    mapfile -t SPECS < <(find features -name '*.md' -type f | sort)
+else
+    echo "No features/ directory found" >&2
+    exit 1
+fi
+
+if [[ ${#SPECS[@]} -eq 0 ]]; then
+    echo "No spec files found" >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Check each spec
+# ---------------------------------------------------------------------------
+FAILURES=0
+WARNINGS=0
+OKS=0
+JSON_ENTRIES=()
+ALL_SPEC_IDS=""
+
+for spec in "${SPECS[@]}"; do
+    target="$(resolve_target "$spec")"
+    spec_ids="$(extract_ac_ids "$spec" || true)"
+    ALL_SPEC_IDS="$(printf '%s\n%s' "$ALL_SPEC_IDS" "$spec_ids" | sort -u)"
+
+    status="ok"
+    error=""
+    missing=""
+    orphaned=""
+    todos=""
+    stale="false"
+
+    if [[ -z "$spec_ids" ]]; then
+        status="warning"
+        error="Spec contains no AC IDs"
+    elif [[ ! -f "$target" ]]; then
+        status="fail"
+        error="Test file does not exist"
+        missing="$spec_ids"
+    else
+        covered_ids="$(extract_covered_ids "$target" || true)"
+        missing="$(comm -23 <(echo "$spec_ids") <(echo "$covered_ids") || true)"
+        orphaned="$(comm -13 <(echo "$spec_ids") <(echo "$covered_ids") || true)"
+        todos="$(grep -oE '// TODO\(helper\):[^\n]+' "$target" 2>/dev/null || true)"
+
+        if [[ "$spec" -nt "$target" ]]; then
+            stale="true"
+        fi
+
+        if [[ -n "$missing" || -n "$orphaned" ]]; then
+            status="fail"
+        elif [[ "$stale" == "true" || -n "$todos" ]]; then
+            status="warning"
+        fi
+    fi
+
+    case "$status" in
+        ok)      ((OKS++)) ;;
+        warning) ((WARNINGS++)) ;;
+        fail)    ((FAILURES++)) ;;
+    esac
+
+    if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+        entry="$(jq -n \
+            --arg spec "$spec" \
+            --arg test "$target" \
+            --arg status "$status" \
+            --arg error "$error" \
+            --arg missing "$missing" \
+            --arg orphaned "$orphaned" \
+            --arg todos "$todos" \
+            --arg stale "$stale" \
+            '{
+                spec: $spec, test: $test, status: $status,
+                error: $error,
+                missing: ($missing | split("\n") | map(select(length > 0))),
+                orphaned: ($orphaned | split("\n") | map(select(length > 0))),
+                todos: ($todos | split("\n") | map(select(length > 0))),
+                stale: ($stale == "true")
+            }')"
+        JSON_ENTRIES+=("$entry")
+    else
+        case "$status" in
+            ok)      icon=$'\033[32m✓\033[0m' ;;
+            warning) icon=$'\033[33m⚠\033[0m' ;;
+            fail)    icon=$'\033[31m✗\033[0m' ;;
+        esac
+        echo "$icon $spec"
+        [[ -n "$error" ]]    && echo "    error: $error"
+        [[ -n "$missing" ]]  && echo "    missing tests: $(echo "$missing" | tr '\n' ' ')"
+        [[ -n "$orphaned" ]] && echo "    unknown ACs:   $(echo "$orphaned" | tr '\n' ' ')"
+        [[ -n "$todos" ]]    && echo "$todos" | sed 's/^/    /'
+        [[ "$stale" == "true" ]] && echo "    spec modified after test — regenerate?"
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# Orphaned test files: tests that @covers IDs no spec defines
+# ---------------------------------------------------------------------------
+if [[ -d tests/Feature ]]; then
+    while IFS= read -r test_file; do
+        covered="$(extract_covered_ids "$test_file" || true)"
+        [[ -z "$covered" ]] && continue
+
+        # Skip files we already checked (those resolved from a spec)
+        already_known=0
+        for spec in "${SPECS[@]}"; do
+            if [[ "$(resolve_target "$spec")" == "$test_file" ]]; then
+                already_known=1
+                break
+            fi
+        done
+        [[ "$already_known" -eq 1 ]] && continue
+
+        unknown="$(comm -23 <(echo "$covered") <(echo "$ALL_SPEC_IDS") || true)"
+        if [[ -n "$unknown" ]]; then
+            ((FAILURES++))
+            if [[ "$JSON_OUTPUT" -eq 0 ]]; then
+                echo $'\033[31m✗\033[0m '"$test_file (orphaned)"
+                echo "    references unknown ACs: $(echo "$unknown" | tr '\n' ' ')"
+            fi
+        fi
+    done < <(find tests/Feature -name '*Test.php' -type f)
+fi
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+if [[ "$JSON_OUTPUT" -eq 1 ]]; then
+    printf '%s\n' "${JSON_ENTRIES[@]}" | jq -s '.'
+else
+    echo
+    printf 'Specs: %d  ✓ %d  ⚠ %d  ✗ %d\n' \
+        "${#SPECS[@]}" "$OKS" "$WARNINGS" "$FAILURES"
+fi
+
+[[ "$FAILURES" -eq 0 ]] && exit 0 || exit 1

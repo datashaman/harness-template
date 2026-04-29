@@ -1,0 +1,59 @@
+name: spec-tests
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'features/**.md'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: spec-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    if: ${{ hashFiles('bin/feature-changed') != '' && hashFiles('bin/generate-tests') != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # BOT_TOKEN lets the push from this workflow retrigger harness.yml +
+      # review.yml on the PR. With GITHUB_TOKEN, downstream workflows won't fire.
+      GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Guard against missing API key
+        if: env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "ANTHROPIC_API_KEY not set — cannot regenerate tests" >&2
+          exit 1
+
+      - name: Regenerate tests for changed specs
+        run: |
+          git fetch origin "$BASE_REF" --depth=1
+          bin/feature-changed "origin/$BASE_REF"
+
+      - name: Commit and push if tests changed
+        run: |
+          if [[ -z "$(git status --porcelain tests/)" ]]; then
+            echo "no test changes — nothing to commit"
+            exit 0
+          fi
+          git config user.name "harness-bot"
+          git config user.email "harness-bot@users.noreply.github.com"
+          git checkout "$HEAD_REF"
+          git add tests/
+          git commit -m "test: regenerate from changed specs"
+          git push origin "HEAD:$HEAD_REF"

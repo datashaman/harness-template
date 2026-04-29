@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Regenerate tests for feature specs changed vs the base branch.
+# Usage: bin/feature-changed [base-branch]
+# Default base: main
+
+set -euo pipefail
+
+BASE="${1:-main}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "Not a git repository" >&2
+    exit 1
+fi
+
+CHANGED="$(git diff --name-only "$BASE"...HEAD -- 'features/**.md' || true)"
+
+if [[ -z "$CHANGED" ]]; then
+    echo "No spec changes vs $BASE."
+    exit 0
+fi
+
+echo "Specs changed vs $BASE:"
+echo "$CHANGED" | sed 's/^/  /'
+echo
+
+while IFS= read -r spec; do
+    [[ -f "$spec" ]] || continue   # skip deletions
+    echo "→ Generating $spec"
+    bin/generate-tests "$spec" --force
+    echo
+done <<< "$CHANGED"

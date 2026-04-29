@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Scaffold a new feature spec file from a template.
+# Usage: bin/feature-new <relative-path> <title> <id-prefix> [--linked=<ref>]
+#
+# If stdin is not a terminal, its content replaces the Notes placeholder —
+# useful for piping a GitHub issue body into the spec.
+
+set -euo pipefail
+
+REL_PATH=""
+TITLE=""
+PREFIX=""
+LINKED=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --linked=*) LINKED="${arg#--linked=}" ;;
+        --*) echo "Unknown flag: $arg" >&2; exit 2 ;;
+        *)
+            if   [[ -z "$REL_PATH" ]]; then REL_PATH="$arg"
+            elif [[ -z "$TITLE"    ]]; then TITLE="$arg"
+            elif [[ -z "$PREFIX"   ]]; then PREFIX="$arg"
+            else echo "Unexpected arg: $arg" >&2; exit 2
+            fi
+            ;;
+    esac
+done
+
+if [[ -z "$REL_PATH" || -z "$TITLE" || -z "$PREFIX" ]]; then
+    cat <<EOF >&2
+Usage: bin/feature-new <relative-path> <title> <id-prefix> [--linked=<ref>]
+
+Example:
+  bin/feature-new auth/two-factor "Two-Factor Authentication" TFA
+  → creates features/auth/two-factor.md with IDs TFA-1, TFA-2...
+
+Pipe a body in to populate the Notes section:
+  gh issue view 42 --json body -q .body | bin/feature-new auth/two-factor "..." TFA --linked=#42
+EOF
+    exit 2
+fi
+
+TARGET="features/${REL_PATH}.md"
+
+if [[ -f "$TARGET" ]]; then
+    echo "Already exists: $TARGET" >&2
+    exit 1
+fi
+
+NOTES="(context, references, edge cases not covered by ACs)"
+if [[ ! -t 0 ]]; then
+    piped="$(cat)"
+    [[ -n "$piped" ]] && NOTES="$piped"
+fi
+
+mkdir -p "$(dirname "$TARGET")"
+
+cat > "$TARGET" <<EOF
+# ${TITLE}
+
+**Owner:**
+**Status:** Draft
+**Linked:** ${LINKED}
+
+## Acceptance Criteria
+
+| ID        | Behaviour                          | Level    | Priority |
+|-----------|------------------------------------|----------|----------|
+| ${PREFIX}-1 | (describe the first behaviour)   | feature  | Must     |
+
+## Notes
+
+${NOTES}
+EOF
+
+echo "Created $TARGET"

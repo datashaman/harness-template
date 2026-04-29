@@ -1,0 +1,157 @@
+name: issue-to-spec
+
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: issue-to-spec-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  scaffold:
+    # Only run on issue-opened, and only when bin/feature-new is present.
+    if: ${{ github.event_name == 'issues' && github.event.action == 'opened' && !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ISSUE: ${{ github.event.issue.number }}
+      TITLE: ${{ github.event.issue.title }}
+      BODY: ${{ github.event.issue.body }}
+      BRANCH: spec/issue-${{ github.event.issue.number }}
+      GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Verify stack ships feature-new
+        id: gate
+        run: |
+          if [[ ! -x bin/feature-new ]]; then
+            echo "no bin/feature-new in this stack — skipping"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Derive path and prefix
+        if: steps.gate.outputs.skip != '1'
+        id: derive
+        run: |
+          area=""
+          prefix=""
+          while IFS= read -r label; do
+            case "$label" in
+              area:*)   area="${label#area:}" ;;
+              prefix:*) prefix="${label#prefix:}" ;;
+            esac
+          done < <(jq -r '.[].name' <<<'${{ toJSON(github.event.issue.labels) }}')
+
+          slug="$(printf '%s' "$TITLE" \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' \
+            | cut -c1-60)"
+          [[ -z "$slug" ]] && slug="issue-${ISSUE}"
+
+          if [[ -n "$area" ]]; then
+            rel="${area}/${slug}"
+          else
+            rel="$slug"
+          fi
+
+          if [[ -z "$prefix" ]]; then
+            prefix="$(printf '%s' "$TITLE" \
+              | tr '[:lower:]' '[:upper:]' \
+              | grep -oE '[A-Z0-9]+' \
+              | awk '{ printf "%s", substr($0, 1, 1) }' \
+              | cut -c1-4)"
+          fi
+          [[ -z "$prefix" ]] && prefix="F${ISSUE}"
+
+          echo "rel=$rel"       >> "$GITHUB_OUTPUT"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+
+      - name: Configure git and create branch
+        if: steps.gate.outputs.skip != '1'
+        run: |
+          git config user.name "harness-bot"
+          git config user.email "harness-bot@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+
+      - name: Generate spec
+        if: steps.gate.outputs.skip != '1'
+        env:
+          REL: ${{ steps.derive.outputs.rel }}
+          PREFIX: ${{ steps.derive.outputs.prefix }}
+        run: |
+          printf '%s' "$BODY" | bin/feature-new "$REL" "$TITLE" "$PREFIX" --linked="#${ISSUE}"
+
+      - name: Commit and open PR
+        if: steps.gate.outputs.skip != '1'
+        env:
+          REL: ${{ steps.derive.outputs.rel }}
+        run: |
+          git add "features/${REL}.md"
+          git commit -m "spec: scaffold ${REL} from #${ISSUE}"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "spec: ${TITLE}" \
+            --body "Scaffolded from #${ISSUE}. Fill in acceptance criteria, then \`bin/generate-tests features/${REL}.md\` to seed the Pest file." \
+            --label "spec:draft" \
+            --head "$BRANCH" \
+            --base main
+
+  notify:
+    # On issue edits and new issue comments: ping the open spec PR (if any)
+    # so the spec author sees the scope change. We do not edit the spec file —
+    # once the PR is open, the spec is the source of truth.
+    if: ${{ (github.event_name == 'issues' && github.event.action == 'edited') || (github.event_name == 'issue_comment' && github.event.action == 'created' && !github.event.issue.pull_request) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      ISSUE: ${{ github.event.issue.number }}
+      BRANCH: spec/issue-${{ github.event.issue.number }}
+      GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+      EVENT: ${{ github.event_name }}
+      ACTOR: ${{ github.event.sender.login }}
+      COMMENT_URL: ${{ github.event.comment.html_url }}
+      COMMENT_BODY: ${{ github.event.comment.body }}
+
+    steps:
+      - name: Find open spec PR for this issue
+        id: find
+        run: |
+          pr="$(gh pr list \
+            --repo "$GITHUB_REPOSITORY" \
+            --head "$BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+          if [[ -z "$pr" ]]; then
+            echo "no open spec PR for $BRANCH — nothing to notify"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr=$pr" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post scope-change notice on PR
+        if: steps.find.outputs.skip != '1'
+        env:
+          PR: ${{ steps.find.outputs.pr }}
+        run: |
+          if [[ "$EVENT" == "issues" ]]; then
+            body="$(printf '⚠️ Source issue #%s was edited by @%s — scope may have changed. Review the issue body and amend this spec by hand if needed.\n\nSee: %s' \
+              "$ISSUE" "$ACTOR" "${{ github.event.issue.html_url }}")"
+          else
+            body="$(printf '💬 New comment on source issue #%s by @%s:\n\n> %s\n\n%s' \
+              "$ISSUE" "$ACTOR" "${COMMENT_BODY//$'\n'/$'\n'> }" "$COMMENT_URL")"
+          fi
+          gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$body"
