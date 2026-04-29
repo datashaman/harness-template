@@ -9,3 +9,4 @@ coverage/
 .mypy_cache/
 .ruff_cache/
 .tsbuildinfo
+actionlint

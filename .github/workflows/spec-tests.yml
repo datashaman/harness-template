@@ -4,7 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize]
     paths:
-      - 'features/**.md'
+      - 'features/**/*.md'
 
 permissions:
   contents: write
@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   regenerate:
-    if: ${{ hashFiles('bin/feature-changed') != '' && hashFiles('bin/generate-tests') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -34,18 +33,28 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Skip if stack does not ship feature-changed
+        id: gate
+        run: |
+          if [[ ! -x bin/feature-changed || ! -x bin/generate-tests ]]; then
+            echo "no bin/feature-changed in this stack — skipping"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Guard against missing API key
-        if: env.ANTHROPIC_API_KEY == ''
+        if: steps.gate.outputs.skip != '1' && env.ANTHROPIC_API_KEY == ''
         run: |
           echo "ANTHROPIC_API_KEY not set — cannot regenerate tests" >&2
           exit 1
 
       - name: Regenerate tests for changed specs
+        if: steps.gate.outputs.skip != '1'
         run: |
           git fetch origin "$BASE_REF" --depth=1
           bin/feature-changed "origin/$BASE_REF"
 
       - name: Commit and push if tests changed
+        if: steps.gate.outputs.skip != '1'
         run: |
           if [[ -z "$(git status --porcelain tests/)" ]]; then
             echo "no test changes — nothing to commit"
