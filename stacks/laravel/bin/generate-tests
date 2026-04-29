@@ -35,11 +35,6 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HELPERS="$ROOT/tests/HelperCatalog.md"
 
-if [[ ! -f "$HELPERS" ]]; then
-    echo "Helper catalog not found: $HELPERS" >&2
-    exit 1
-fi
-
 # ---------------------------------------------------------------------------
 # Resolve target test path:
 #   features/auth/password-reset.md → tests/Feature/Auth/PasswordResetTest.php
@@ -95,7 +90,11 @@ build_payload() {
     local spec_content helpers_content existing_content date
 
     spec_content="$(cat "$SPEC")"
-    helpers_content="$(cat "$HELPERS")"
+    if [[ -f "$HELPERS" ]]; then
+        helpers_content="$(cat "$HELPERS")"
+    else
+        helpers_content="(no HelperCatalog.md found — assume only Pest defaults and Laravel test traits are available; emit TODO(helper) comments for anything you'd want)"
+    fi
     date="$(date +%Y-%m-%d)"
 
     if [[ -f "$TARGET" ]]; then
