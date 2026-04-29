@@ -2,9 +2,15 @@ name: issue-to-spec
 
 on:
   issues:
-    types: [opened, edited]
+    types: [opened, edited, labeled]
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to (re)scaffold"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,20 +18,24 @@ permissions:
   issues: write
 
 concurrency:
-  group: issue-to-spec-${{ github.event.issue.number }}
+  group: issue-to-spec-${{ github.event.issue.number || inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
   scaffold:
-    # Only run on issue-opened, and only when bin/feature-new is present.
-    if: ${{ github.event_name == 'issues' && github.event.action == 'opened' && !github.event.issue.pull_request }}
+    # Fires on:
+    #   - issues: opened (auto)
+    #   - issues: labeled when label == agent:scaffold (manual retry from the issue page)
+    #   - workflow_dispatch (universal escape hatch)
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'opened' && !github.event.issue.pull_request) ||
+      (github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'agent:scaffold' && !github.event.issue.pull_request) ||
+      github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      ISSUE: ${{ github.event.issue.number }}
-      TITLE: ${{ github.event.issue.title }}
-      BODY: ${{ github.event.issue.body }}
-      BRANCH: spec/issue-${{ github.event.issue.number }}
+      NUM: ${{ github.event.issue.number || inputs.issue_number }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
     steps:
@@ -34,32 +44,63 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Verify stack ships feature-new
+      - name: Skip if stack does not ship feature-from-issue
         id: gate
         run: |
-          if [[ ! -x bin/feature-new ]]; then
-            echo "no bin/feature-new in this stack — skipping"
+          if [[ ! -x bin/feature-from-issue ]]; then
+            echo "no bin/feature-from-issue in this stack — skipping"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Derive path and prefix
-        if: steps.gate.outputs.skip != '1'
-        id: derive
+      - name: Guard against missing API key
+        if: steps.gate.outputs.skip != '1' && env.ANTHROPIC_API_KEY == ''
         run: |
+          echo "ANTHROPIC_API_KEY not set — feature-from-issue requires Claude" >&2
+          gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body \
+            "⚠️ Tried to scaffold a spec from this issue, but \`ANTHROPIC_API_KEY\` isn't set on the repo. Add the secret and re-apply the \`agent:scaffold\` label to retry."
+          exit 1
+
+      - name: Resolve issue from API
+        id: issue
+        if: steps.gate.outputs.skip != '1'
+        run: |
+          data="$(gh issue view "$NUM" --repo "$GITHUB_REPOSITORY" --json title,body,labels)"
+          {
+            echo "title<<__TITLE_EOF__"
+            jq -r .title <<<"$data"
+            echo "__TITLE_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<__BODY_EOF__"
+            jq -r .body <<<"$data"
+            echo "__BODY_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "labels<<__LABELS_EOF__"
+            jq -r '.labels[].name' <<<"$data"
+            echo "__LABELS_EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Derive path
+        id: derive
+        if: steps.gate.outputs.skip != '1'
+        env:
+          TITLE: ${{ steps.issue.outputs.title }}
+          LABELS: ${{ steps.issue.outputs.labels }}
+        run: |
+          # area:<name> label becomes a path namespace.
           area=""
-          prefix=""
           while IFS= read -r label; do
             case "$label" in
-              area:*)   area="${label#area:}" ;;
-              prefix:*) prefix="${label#prefix:}" ;;
+              area:*) area="${label#area:}" ;;
             esac
-          done < <(jq -r '.[].name' <<<'${{ toJSON(github.event.issue.labels) }}')
+          done <<<"$LABELS"
 
           slug="$(printf '%s' "$TITLE" \
             | tr '[:upper:]' '[:lower:]' \
             | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$//g' \
             | cut -c1-60)"
-          [[ -z "$slug" ]] && slug="issue-${ISSUE}"
+          [[ -z "$slug" ]] && slug="issue-${NUM}"
 
           if [[ -n "$area" ]]; then
             rel="${area}/${slug}"
@@ -67,61 +108,112 @@ jobs:
             rel="$slug"
           fi
 
-          if [[ -z "$prefix" ]]; then
-            prefix="$(printf '%s' "$TITLE" \
-              | tr '[:lower:]' '[:upper:]' \
-              | grep -oE '[A-Z0-9]+' \
-              | awk '{ printf "%s", substr($0, 1, 1) }' \
-              | cut -c1-4)"
-          fi
-          [[ -z "$prefix" ]] && prefix="F${ISSUE}"
+          echo "rel=$rel" >> "$GITHUB_OUTPUT"
+          echo "branch=spec/issue-${NUM}" >> "$GITHUB_OUTPUT"
 
-          echo "rel=$rel"       >> "$GITHUB_OUTPUT"
-          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
-
-      - name: Configure git and create branch
+      - name: Configure git and prepare branch
+        id: branch
         if: steps.gate.outputs.skip != '1'
+        env:
+          BRANCH: ${{ steps.derive.outputs.branch }}
         run: |
           git config user.name "harness-bot"
           git config user.email "harness-bot@users.noreply.github.com"
-          git checkout -b "$BRANCH"
 
-      - name: Generate spec
-        if: steps.gate.outputs.skip != '1'
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "branch $BRANCH exists; checking for human commits"
+            git fetch origin "$BRANCH:$BRANCH"
+            git checkout "$BRANCH"
+
+            base="$(git merge-base origin/main "$BRANCH")"
+            non_bot="$(git log --format='%ae' "$base..$BRANCH" \
+              | grep -cv 'harness-bot@users.noreply.github.com' || true)"
+            if [[ "$non_bot" -gt 0 ]]; then
+              echo "branch has $non_bot non-bot commit(s) — refusing to overwrite"
+              echo "skip=1" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "existing=1" >> "$GITHUB_OUTPUT"
+          else
+            git checkout -b "$BRANCH"
+            echo "existing=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate spec via Claude
+        if: steps.gate.outputs.skip != '1' && steps.branch.outputs.skip != '1'
         env:
           REL: ${{ steps.derive.outputs.rel }}
-          PREFIX: ${{ steps.derive.outputs.prefix }}
+          TITLE: ${{ steps.issue.outputs.title }}
+          BODY: ${{ steps.issue.outputs.body }}
         run: |
-          printf '%s' "$BODY" | bin/feature-new "$REL" "$TITLE" "$PREFIX" --linked="#${ISSUE}"
+          rm -f "features/${REL}.md"
+          printf '%s' "$BODY" | bin/feature-from-issue "$REL" "$TITLE" --linked="#${NUM}"
 
-      - name: Ensure spec:draft label exists
-        if: steps.gate.outputs.skip != '1'
-        run: |
-          gh label create "spec:draft" \
-            --color "fbca04" \
-            --description "Spec PR scaffolded from an issue, awaiting AC fill-in" \
-            2>/dev/null || true
-
-      - name: Commit and open PR
-        if: steps.gate.outputs.skip != '1'
+      - name: Commit spec if changed
+        id: commit
+        if: steps.gate.outputs.skip != '1' && steps.branch.outputs.skip != '1'
         env:
           REL: ${{ steps.derive.outputs.rel }}
         run: |
           git add "features/${REL}.md"
-          git commit -m "spec: scaffold ${REL} from #${ISSUE}"
-          git push -u origin "$BRANCH"
+          if git diff --cached --quiet; then
+            echo "spec unchanged — no commit"
+            echo "committed=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${{ steps.branch.outputs.existing }}" == "1" ]]; then
+            msg="spec: regenerate ${REL} from #${NUM}"
+          else
+            msg="spec: scaffold ${REL} from #${NUM}"
+          fi
+          git commit -m "$msg"
+          echo "committed=1" >> "$GITHUB_OUTPUT"
+
+      - name: Push branch
+        if: steps.gate.outputs.skip != '1' && steps.branch.outputs.skip != '1' && steps.commit.outputs.committed == '1'
+        env:
+          BRANCH: ${{ steps.derive.outputs.branch }}
+        run: git push -u origin "$BRANCH"
+
+      - name: Ensure spec:draft label exists
+        if: steps.gate.outputs.skip != '1' && steps.branch.outputs.skip != '1'
+        run: |
+          gh label create "spec:draft" \
+            --color "fbca04" \
+            --description "Spec PR scaffolded from an issue, awaiting AC review" \
+            2>/dev/null || true
+
+      - name: Open PR if none exists
+        if: steps.gate.outputs.skip != '1' && steps.branch.outputs.skip != '1'
+        env:
+          BRANCH: ${{ steps.derive.outputs.branch }}
+          REL: ${{ steps.derive.outputs.rel }}
+          TITLE: ${{ steps.issue.outputs.title }}
+        run: |
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            echo "PR already open: #$existing"
+            exit 0
+          fi
           gh pr create \
             --title "spec: ${TITLE}" \
-            --body "Scaffolded from #${ISSUE}. Fill in acceptance criteria, then \`bin/generate-tests features/${REL}.md\` to seed the Pest file." \
+            --body "Scaffolded from #${NUM} by Claude. Review the AC table — under-extraction is intentional, fill in anything missing. Then on push, \`spec-tests.yml\` regenerates Pest tests from the ACs." \
             --label "spec:draft" \
             --head "$BRANCH" \
             --base main
 
+      - name: Comment on issue if branch is locked by human edits
+        if: steps.branch.outputs.skip == '1'
+        env:
+          BRANCH: ${{ steps.derive.outputs.branch }}
+        run: |
+          gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body \
+            "⚠️ Tried to (re)scaffold this issue, but the spec branch \`${BRANCH}\` already has human commits. Resolve those by hand on the PR; the bot won't overwrite them."
+
   notify:
-    # On issue edits and new issue comments: ping the open spec PR (if any)
-    # so the spec author sees the scope change. We do not edit the spec file —
-    # once the PR is open, the spec is the source of truth.
-    if: ${{ (github.event_name == 'issues' && github.event.action == 'edited') || (github.event_name == 'issue_comment' && github.event.action == 'created' && !github.event.issue.pull_request) }}
+    if: |
+      (github.event_name == 'issues' && github.event.action == 'edited' && !github.event.issue.pull_request) ||
+      (github.event_name == 'issue_comment' && github.event.action == 'created' && !github.event.issue.pull_request)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
@@ -156,7 +248,7 @@ jobs:
           PR: ${{ steps.find.outputs.pr }}
         run: |
           if [[ "$EVENT" == "issues" ]]; then
-            body="$(printf '⚠️ Source issue #%s was edited by @%s — scope may have changed. Review the issue body and amend this spec by hand if needed.\n\nSee: %s' \
+            body="$(printf '⚠️ Source issue #%s was edited by @%s. Re-apply the `agent:scaffold` label on the issue if you want the spec regenerated (the bot will only do so if no human has committed to this branch yet).\n\nSee: %s' \
               "$ISSUE" "$ACTOR" "${{ github.event.issue.html_url }}")"
           else
             body="$(printf '💬 New comment on source issue #%s by @%s:\n\n> %s\n\n%s' \

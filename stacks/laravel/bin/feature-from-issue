@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Generate a feature spec from a GitHub issue: title + (free-form) body
+# become a real Acceptance Criteria table via Claude.
+#
+# Usage: bin/feature-from-issue <relative-path> <title> [--linked=<ref>]
+#
+# The issue body is read from stdin. Output is features/<relative-path>.md.
+#
+# Permissive: works even if the body is unstructured prose. The model is
+# instructed to under-extract rather than invent ACs not implied by the body.
+
+set -euo pipefail
+
+REL_PATH=""
+TITLE=""
+LINKED=""
+
+for arg in "$@"; do
+    case "$arg" in
+        --linked=*) LINKED="${arg#--linked=}" ;;
+        --*) echo "Unknown flag: $arg" >&2; exit 2 ;;
+        *)
+            if   [[ -z "$REL_PATH" ]]; then REL_PATH="$arg"
+            elif [[ -z "$TITLE"    ]]; then TITLE="$arg"
+            else echo "Unexpected arg: $arg" >&2; exit 2
+            fi
+            ;;
+    esac
+done
+
+if [[ -z "$REL_PATH" || -z "$TITLE" ]]; then
+    echo "Usage: bin/feature-from-issue <relative-path> <title> [--linked=<ref>]" >&2
+    echo "(issue body on stdin)" >&2
+    exit 2
+fi
+
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+    echo "ANTHROPIC_API_KEY not set" >&2
+    exit 1
+fi
+
+TARGET="features/${REL_PATH}.md"
+if [[ -f "$TARGET" ]]; then
+    echo "Already exists: $TARGET" >&2
+    exit 1
+fi
+
+BODY="$(cat)"
+
+system_prompt=$(cat <<'EOF'
+You convert GitHub issue bodies into a feature-spec markdown file.
+
+Output ONLY the spec markdown. No prose before or after, no fences.
+
+Required structure:
+
+# {{title}}
+
+**Owner:**
+**Status:** Draft
+**Linked:** {{linked}}
+
+## Acceptance Criteria
+
+| ID    | Behaviour                                                  | Level    | Priority |
+|-------|------------------------------------------------------------|----------|----------|
+| AC-1  | …                                                          | feature  | Must     |
+| AC-2  | …                                                          | feature  | Must     |
+
+## Notes
+
+(verbatim copy of the issue body)
+
+Hard rules:
+- AC IDs are AC-1, AC-2, AC-3, ... in order. No other prefix.
+- Each row is one testable behaviour, phrased as a single sentence in
+  present tense ("returns 204", "rejects expired tokens").
+- Extract ACs from whatever the body provides — bullets, prose, examples.
+  If the body is vague, produce fewer ACs rather than inventing them.
+- Under-extract rather than over-extract. It is fine to produce only
+  AC-1 if the body only describes one behaviour clearly.
+- Level is one of: feature, security, perf, reliability, ux. Default: feature.
+- Priority is one of: Must, Should, Could. Default: Must.
+- The Notes section MUST be the issue body, copied verbatim, with no edits.
+- Do not add "out of scope" items as ACs. If the body has an out-of-scope
+  list, leave it in Notes.
+EOF
+)
+
+user_prompt=$(printf 'Title: %s\n\nLinked: %s\n\n## Issue body\n\n%s' "$TITLE" "$LINKED" "$BODY")
+
+PAYLOAD="$(jq -n \
+    --arg model "claude-opus-4-7" \
+    --arg system "$system_prompt" \
+    --arg user "$user_prompt" \
+    --argjson max_tokens 4000 \
+    '{
+        model: $model,
+        max_tokens: $max_tokens,
+        system: $system,
+        messages: [{role: "user", content: $user}]
+    }')"
+
+echo "Spec:    $TARGET"
+echo "Calling Claude..."
+
+RESPONSE="$(curl -sS https://api.anthropic.com/v1/messages \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "content-type: application/json" \
+    --max-time 120 \
+    -d "$PAYLOAD")"
+
+if echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+    echo "API error:" >&2
+    echo "$RESPONSE" | jq '.error' >&2
+    exit 1
+fi
+
+GENERATED="$(echo "$RESPONSE" | jq -r '.content[] | select(.type == "text") | .text')"
+
+# Strip stray fences if the model adds them despite instructions.
+GENERATED="$(echo "$GENERATED" | sed -E '1{/^```(markdown|md)?$/d;}; ${/^```$/d;}')"
+
+# Sanity checks.
+if ! echo "$GENERATED" | grep -q '^# '; then
+    echo "Generated output missing markdown title heading" >&2
+    echo "--- First 300 chars ---" >&2
+    echo "$GENERATED" | head -c 300 >&2
+    echo >&2
+    exit 1
+fi
+
+if ! echo "$GENERATED" | grep -qE '^\|\s*AC-1\s*\|'; then
+    echo "Generated output missing AC-1 row" >&2
+    echo "--- First 500 chars ---" >&2
+    echo "$GENERATED" | head -c 500 >&2
+    echo >&2
+    exit 1
+fi
+
+mkdir -p "$(dirname "$TARGET")"
+echo "$GENERATED" > "$TARGET"
+echo "Wrote $TARGET"

@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Scaffold a new feature spec file from a template.
-# Usage: bin/feature-new <relative-path> <title> <id-prefix> [--linked=<ref>]
+# Scaffold a new feature spec file with a placeholder AC table.
+# Usage: bin/feature-new <relative-path> <title> [--linked=<ref>]
 #
-# If stdin is not a terminal, its content replaces the Notes placeholder —
-# useful for piping a GitHub issue body into the spec.
+# This is the no-AI fallback. For issues with a body, prefer
+# bin/feature-from-issue, which fills in the AC table from the body.
+#
+# If stdin is not a terminal, its content replaces the Notes placeholder.
 
 set -euo pipefail
 
 REL_PATH=""
 TITLE=""
-PREFIX=""
 LINKED=""
 
 for arg in "$@"; do
@@ -19,23 +20,22 @@ for arg in "$@"; do
         *)
             if   [[ -z "$REL_PATH" ]]; then REL_PATH="$arg"
             elif [[ -z "$TITLE"    ]]; then TITLE="$arg"
-            elif [[ -z "$PREFIX"   ]]; then PREFIX="$arg"
             else echo "Unexpected arg: $arg" >&2; exit 2
             fi
             ;;
     esac
 done
 
-if [[ -z "$REL_PATH" || -z "$TITLE" || -z "$PREFIX" ]]; then
+if [[ -z "$REL_PATH" || -z "$TITLE" ]]; then
     cat <<EOF >&2
-Usage: bin/feature-new <relative-path> <title> <id-prefix> [--linked=<ref>]
+Usage: bin/feature-new <relative-path> <title> [--linked=<ref>]
 
 Example:
-  bin/feature-new auth/two-factor "Two-Factor Authentication" TFA
-  → creates features/auth/two-factor.md with IDs TFA-1, TFA-2...
+  bin/feature-new auth/two-factor "Two-Factor Authentication"
+  → creates features/auth/two-factor.md with placeholder AC-1.
 
 Pipe a body in to populate the Notes section:
-  gh issue view 42 --json body -q .body | bin/feature-new auth/two-factor "..." TFA --linked=#42
+  gh issue view 42 --json body -q .body | bin/feature-new auth/two-factor "..." --linked=#42
 EOF
     exit 2
 fi
@@ -64,9 +64,9 @@ cat > "$TARGET" <<EOF
 
 ## Acceptance Criteria
 
-| ID        | Behaviour                          | Level    | Priority |
-|-----------|------------------------------------|----------|----------|
-| ${PREFIX}-1 | (describe the first behaviour)   | feature  | Must     |
+| ID    | Behaviour                          | Level    | Priority |
+|-------|------------------------------------|----------|----------|
+| AC-1  | (describe the first behaviour)     | feature  | Must     |
 
 ## Notes
 
