@@ -94,6 +94,14 @@ jobs:
         run: |
           printf '%s' "$BODY" | bin/feature-new "$REL" "$TITLE" "$PREFIX" --linked="#${ISSUE}"
 
+      - name: Ensure spec:draft label exists
+        if: steps.gate.outputs.skip != '1'
+        run: |
+          gh label create "spec:draft" \
+            --color "fbca04" \
+            --description "Spec PR scaffolded from an issue, awaiting AC fill-in" \
+            2>/dev/null || true
+
       - name: Commit and open PR
         if: steps.gate.outputs.skip != '1'
         env:
